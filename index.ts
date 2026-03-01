@@ -13,7 +13,7 @@ const JINA_API_KEY = process.env.JINA_API_KEY || '';
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
-// URL Cleaning function - nutzt die SEO-Subdomain gegen den 403-Fehler
+// URL Cleaning function
 const cleanUrlFromTracking = (url: string): string => {
   if (!url) return url;
   try {
@@ -27,15 +27,14 @@ const cleanUrlFromTracking = (url: string): string => {
   }
 };
 
-// ScraperAPI Fetcher (Optimiert für Speed: render=false)
+// ScraperAPI Fetcher
 const fetchFromScraperAPI = async (url: string): Promise<{ text: string, imageUrl: string | null }> => {
   if (!SCRAPER_API_KEY) throw new Error("ScraperAPI Key fehlt.");
 
-  // render=false macht das Scraping extrem schnell, premium=true nutzt gute Proxys
   const apiReq = `https://api.scraperapi.com/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(url)}&render=false&premium=true&country_code=de`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s Timeout
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const resp = await fetch(apiReq, { signal: controller.signal });
@@ -46,7 +45,6 @@ const fetchFromScraperAPI = async (url: string): Promise<{ text: string, imageUr
 
     const html = await resp.text();
 
-    // Jina nur noch zum Umwandeln von HTML in Markdown
     const jinaResp = await fetch(`https://r.jina.ai/${url}`, {
       method: 'POST',
       headers: {
@@ -79,7 +77,7 @@ const fetchFromScraperAPI = async (url: string): Promise<{ text: string, imageUr
   }
 };
 
-// Jina Fallback Fetcher (für Nicht-mobile.de Seiten)
+// Jina Fallback Fetcher
 const fetchFromJina = async (url: string): Promise<{ text: string, imageUrl: string | null }> => {
   if (!JINA_API_KEY) throw new Error("Jina API Key fehlt.");
 
@@ -110,7 +108,7 @@ const fetchFromJina = async (url: string): Promise<{ text: string, imageUrl: str
   }
 };
 
-// Haupt-Scraping-Route
+// Route: Scrape
 app.post('/api/scrape', async (req, res) => {
   try {
     const { url: rawUrl } = req.body;
@@ -119,11 +117,9 @@ app.post('/api/scrape', async (req, res) => {
     const cleanUrl = cleanUrlFromTracking(rawUrl);
     let scrapeResult;
     
-    // mobile.de -> Immer erst ScraperAPI
     if (cleanUrl.includes('mobile.de')) {
       scrapeResult = await fetchFromScraperAPI(cleanUrl);
     } else {
-      // Andere Seiten -> Erst Jina versuchen, dann ScraperAPI Fallback
       try {
         scrapeResult = await fetchFromJina(cleanUrl);
       } catch (e) {
@@ -138,7 +134,7 @@ app.post('/api/scrape', async (req, res) => {
   }
 });
 
-// KI-Analyse Route (DeepSeek v3.2)
+// Route: Valuation (HIER WAR DER FEHLER - GEFIXT)
 app.post('/api/valuation', async (req, res) => {
   try {
     const { adText = '' } = req.body;
@@ -167,7 +163,8 @@ app.post('/api/valuation', async (req, res) => {
 
     if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
     
-    const data = await response.json();
+    // DER FIX: data als any casten
+    const data = (await response.json()) as any;
     const text = data.choices?.[0]?.message?.content ?? 'Fehler bei der KI-Antwort';
     res.json({ text });
   } catch (e: any) {
@@ -175,7 +172,7 @@ app.post('/api/valuation', async (req, res) => {
   }
 });
 
-// Seller Analysis Route
+// Route: Seller Analysis (HIER WAR DER FEHLER - GEFIXT)
 app.post('/api/seller-analysis', async (req, res) => {
   try {
     const { originalReport = '', sellerResponse = '' } = req.body;
@@ -204,7 +201,8 @@ app.post('/api/seller-analysis', async (req, res) => {
 
     if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
     
-    const data = await response.json();
+    // DER FIX: data als any casten
+    const data = (await response.json()) as any;
     const text = data.choices?.[0]?.message?.content ?? 'Keine Analyse möglich.';
     res.json({ text });
   } catch (e: any) {
@@ -213,4 +211,4 @@ app.post('/api/seller-analysis', async (req, res) => {
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3001;
-app.listen(port, '0.0.0.0', () => console.log(`Wertifix Proxy-Server läuft auf Port ${port} (WLAN-fähig)`));
+app.listen(port, '0.0.0.0', () => console.log(`Wertifix Proxy-Server läuft auf Port ${port}`));
